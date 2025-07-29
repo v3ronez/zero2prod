@@ -1,4 +1,4 @@
-use std::net::TcpListener;
+use std::{io::Bytes, net::TcpListener};
 
 #[tokio::test]
 async fn health_check_works() {
@@ -12,6 +12,52 @@ async fn health_check_works() {
     println!("\ntest server run on address: {}\n", address);
     assert!(response.status().is_success());
     assert_eq!(response.content_length(), Some(0));
+}
+
+#[tokio::test]
+async fn subscribe_returns_200_for_valid_form_data() {
+    let app_address = spawn_app();
+    let client = reqwest::Client::new();
+    let body = "name=Henrique%20Veronez&email=v3ronez.dev%40gmail.com";
+    let response = client
+        .post(format!("{}/subscriptions", &app_address))
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(body)
+        .send()
+        .await
+        .expect("Failed to execute request.");
+    //assert
+    assert_eq!(200, response.status().as_u16())
+}
+
+#[tokio::test]
+async fn subscribe_returns_400_for_invalid_form_data() {
+    let app_address = spawn_app();
+    let client = reqwest::Client::new();
+    let body = vec![
+        ("name=le%20guin", "missing the email"),
+        ("email=ursula_le_%40gmail.com", "missing the name"),
+        ("", "missing both name and email"),
+    ];
+
+    for (invalid_body, error_message) in body {
+        //Act
+        let response = client
+            .post(format!("{}/subscriptions", &app_address))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(invalid_body)
+            .send()
+            .await
+            .expect("Failed to execute request.");
+        //Assert
+        assert_eq!(
+            400,
+            response.status().as_u16(),
+            // Additional customised error message on test failure
+            "The API did not fail with 400 Bad Request when the payload was {}.",
+            error_message
+        )
+    }
 }
 
 fn spawn_app() -> String {
