@@ -10,7 +10,8 @@ async fn health_check_works() {
         .await
         .expect("Failed to execute request.");
     println!("\ntest server run on address: {}\n", address);
-    assert!(response.status().is_success())
+    assert!(response.status().is_success());
+    assert_eq!(response.content_length(), Some(0));
 }
 
 fn spawn_app() -> String {
