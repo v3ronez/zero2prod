@@ -1,12 +1,11 @@
 use std::net::TcpListener;
-
-use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, rt::net, web};
-use zero2prod::run;
+use zero2prod::{configuration, startup::run};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind a random port");
-    let port = listener.local_addr().unwrap().port();
-    println!("Server running on: 127.0.0.1:{}", port);
+    let settings = configuration::get_configuration().expect("Failed to read configuration");
+    let address = format!("127.0.0.1:{}", settings.application_port);
+    let listener = TcpListener::bind(&address)?;
+    println!("Server running on: {address}");
     run(listener)?.await
 }
