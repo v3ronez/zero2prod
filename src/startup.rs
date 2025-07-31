@@ -1,14 +1,16 @@
-use std::net::TcpListener;
-
-use crate::routes;
-
+use crate::routes::{health_check, subscribe};
 use actix_web::dev::Server;
 use actix_web::{App, HttpServer, web};
-pub fn run(listener: TcpListener) -> Result<Server, std::io::Error> {
-    let server = HttpServer::new(|| {
+use sqlx::PgConnection;
+use std::net::TcpListener;
+
+pub fn run(listener: TcpListener, connection: PgConnection) -> Result<Server, std::io::Error> {
+    let connection = web::Data::new(connection);
+    let server = HttpServer::new(move || {
         App::new()
-            .route("/health", web::get().to(routes::health_check))
-            .route("/subscriptions", web::post().to(routes::subscribe))
+            .route("/health", web::get().to(health_check))
+            .route("/subscriptions", web::post().to(subscribe))
+            .app_data(connection.clone())
     })
     .listen(listener)?
     .run();
