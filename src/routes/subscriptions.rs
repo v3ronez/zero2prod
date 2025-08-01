@@ -1,6 +1,10 @@
+use std::{sync::Mutex, time};
+
 use actix_web::{HttpResponse, web};
+use chrono::Utc;
 use serde::Deserialize;
-use sqlx::PgConnection;
+use sqlx::{PgConnection, PgPool};
+use uuid::{Timestamp, Uuid};
 
 #[derive(Deserialize)]
 pub struct Subscription {
@@ -9,8 +13,26 @@ pub struct Subscription {
 }
 
 pub async fn subscribe(
-    _form: web::Form<Subscription>,
-    _connection: web::Data<PgConnection>,
+    form: web::Form<Subscription>,
+    connection: web::Data<PgPool>,
 ) -> HttpResponse {
-    HttpResponse::Ok().finish()
+    let row = sqlx::query!(
+        r#"
+    INSERT INTO subscriptions (id, email, name, subscribed_at)
+    VALUES ($1, $2, $3, $4)
+    "#,
+        Uuid::now_v7(),
+        form.email,
+        form.name,
+        Utc::now()
+    )
+    .execute(connection.get_ref())
+    .await;
+    match row {
+        Ok(_) => HttpResponse::Ok().finish(),
+        Err(err) => {
+            eprintln!("{}", err.to_string());
+            HttpResponse::BadRequest().finish()
+        }
+    }
 }
