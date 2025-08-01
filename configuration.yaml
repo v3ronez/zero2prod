@@ -4,4 +4,4 @@ database:
   port: "5432"
   username: "root"
   password: ""
-  database: "newsletter"
+  database_name: "newsletter"

@@ -1,17 +1,18 @@
-use std::{io::Bytes, net::TcpListener};
+use std::net::TcpListener;
 
-use actix_web::{App, HttpServer, web};
-use sqlx::{Connection, PgPool, Postgres};
+use sqlx::{Connection, Executor, PgConnection, PgPool, Row};
+use uuid::Uuid;
 use zero2prod::configuration::{self, get_configuration};
 
 async fn spawn_app() -> TestApp {
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind a random port");
     let port = listener.local_addr().unwrap().port();
     let address = format!("http://127.0.0.1:{}", port);
-    let settings = configuration::get_configuration().expect("Failed to read configuration file");
-    let connection_pool = sqlx::PgPool::connect(&settings.database.connection_string())
-        .await
-        .unwrap();
+    let mut settings =
+        configuration::get_configuration().expect("Failed to read configuration file");
+    settings.database.database_name = Uuid::now_v7().to_string();
+
+    let connection_pool = configure_database(&settings.database).await;
 
     let server = zero2prod::startup::run(listener, connection_pool.clone()).unwrap();
 
@@ -20,6 +21,36 @@ async fn spawn_app() -> TestApp {
         address,
         connection_pool,
     }
+}
+
+async fn configure_database(
+    config: &configuration::DatabaseSettings,
+) -> sqlx::Pool<sqlx::Postgres> {
+    let query = format!(r#"CREATE DATABASE "{}";"#, &config.database_name);
+    let mut connection = PgConnection::connect(&config.connection_string_without_database())
+        .await
+        .expect(
+            format!(
+                "Failed to connect on {}",
+                config.connection_string_without_database()
+            )
+            .as_str(),
+        );
+
+    connection
+        .execute(query.as_str())
+        .await
+        .expect(format!("Error to execute this query: {}", query).as_str());
+
+    let connection_pool = PgPool::connect(&config.connection_string())
+        .await
+        .expect(format!("Failed to connect on {}", config.connection_string()).as_str());
+    sqlx::migrate!("./migrations")
+        .run(&connection_pool)
+        .await
+        .expect("Error to run migration on test");
+
+    connection_pool
 }
 
 #[tokio::test]
@@ -32,8 +63,12 @@ async fn health_check_works() {
         .await
         .expect("Failed to execute request.");
     println!("\ntest server run on address: {}\n", &app.address);
+
     assert!(response.status().is_success());
     assert_eq!(response.content_length(), Some(0));
+
+    //reset db
+    drop_database(&app.connection_pool).await;
 }
 
 #[tokio::test]
@@ -64,6 +99,9 @@ async fn subscribe_returns_200_for_valid_form_data() {
 
     assert_eq!(saved.email, "v3ronez.dev@gmail.com");
     assert_eq!(saved.name, "Henrique Veronez");
+
+    //reset db
+    drop_database(&app.connection_pool).await;
 }
 
 #[tokio::test]
@@ -94,6 +132,30 @@ async fn subscribe_returns_400_for_invalid_form_data() {
             error_message
         )
     }
+
+    //reset db
+    drop_database(&app.connection_pool).await;
+}
+
+async fn drop_database(pool: &PgPool) {
+    let opts = pool.connect_options();
+    let dbname = opts.get_database().unwrap();
+    pool.close().await;
+    let default_pool = configuration::get_configuration().unwrap();
+
+    let new_pool = PgPool::connect(
+        default_pool
+            .database
+            .connection_string_without_database()
+            .as_str(),
+    )
+    .await
+    .unwrap();
+
+    sqlx::query(format!(r#"DROP DATABASE "{}";"#, dbname).as_str())
+        .execute(&new_pool)
+        .await
+        .unwrap();
 }
 
 struct TestApp {

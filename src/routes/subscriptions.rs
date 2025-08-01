@@ -1,10 +1,8 @@
-use std::{sync::Mutex, time};
-
 use actix_web::{HttpResponse, web};
 use chrono::Utc;
 use serde::Deserialize;
-use sqlx::{PgConnection, PgPool};
-use uuid::{Timestamp, Uuid};
+use sqlx::PgPool;
+use uuid::Uuid;
 
 #[derive(Deserialize)]
 pub struct Subscription {
