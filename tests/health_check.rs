@@ -1,10 +1,27 @@
 use std::net::TcpListener;
 
-use sqlx::{Connection, Executor, PgConnection, PgPool, Row};
+use once_cell::sync::Lazy;
+use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
-use zero2prod::configuration::{self, get_configuration};
+use zero2prod::{configuration, telemetry};
+
+static TRACING: Lazy<()> = Lazy::new(|| {
+    let default_filter_level = "info".to_string();
+    let subscriber_name = "test".to_string();
+    if std::env::var("TEST_LOG").is_ok() {
+        let subscriber =
+            telemetry::get_subscriber(subscriber_name, default_filter_level, std::io::stdout);
+        telemetry::init_subscriber(subscriber);
+    } else {
+        let subscriber =
+            telemetry::get_subscriber(subscriber_name, default_filter_level, std::io::sink);
+        telemetry::init_subscriber(subscriber);
+    }
+});
 
 async fn spawn_app() -> TestApp {
+    Lazy::force(&TRACING);
+
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind a random port");
     let port = listener.local_addr().unwrap().port();
     let address = format!("http://127.0.0.1:{}", port);
@@ -74,12 +91,6 @@ async fn health_check_works() {
 #[tokio::test]
 async fn subscribe_returns_200_for_valid_form_data() {
     let app = spawn_app().await;
-    let configuration = get_configuration().expect("Failed to read configuration");
-    let connection_string = configuration.database.connection_string();
-    let mut connect = sqlx::PgConnection::connect(&connection_string)
-        .await
-        .expect("Failed to connect on database");
-
     let client = reqwest::Client::new();
     let body = "name=Henrique%20Veronez&email=v3ronez.dev%40gmail.com";
     let response = client
@@ -93,7 +104,7 @@ async fn subscribe_returns_200_for_valid_form_data() {
     assert_eq!(200, response.status().as_u16());
 
     let saved = sqlx::query!("SELECT email, name FROM subscriptions")
-        .fetch_one(&mut connect)
+        .fetch_one(&app.connection_pool)
         .await
         .expect("Failed to fetch saved subscription");
 
