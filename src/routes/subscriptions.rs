@@ -1,7 +1,10 @@
-use actix_web::{HttpResponse, web};
+use actix_web::{
+    HttpResponse,
+    web::{self, Form},
+};
 use chrono::Utc;
 use serde::Deserialize;
-use sqlx::PgPool;
+use sqlx::{PgPool, Pool};
 use tracing::Instrument;
 use uuid::Uuid;
 
@@ -11,20 +14,25 @@ pub struct Subscription {
     email: String,
 }
 
-pub async fn subscribe(
-    form: web::Form<Subscription>,
-    connection: web::Data<PgPool>,
-) -> HttpResponse {
-    let request_id = Uuid::new_v4();
-    let request_span = tracing::info_span!(
-        "Adding a new subscriber.",
-        %request_id,
-        subscriber_email = %form.email,
-        subscriber_nam = %form.name
-    );
-    let _request_span_guard = request_span.enter();
-    let query_span = tracing::info_span!("Saving new subscriber in the database");
-    let row = sqlx::query!(
+#[tracing::instrument(
+    name = "Adding new subscriber", 
+    skip(form, pool),
+    fields(
+        request_id=%Uuid::new_v4(),
+        subscriber_name = %form.name,
+        subscriber_email = %form.email
+    )
+)]
+pub async fn subscribe(form: web::Form<Subscription>, pool: web::Data<PgPool>) -> HttpResponse {
+    match insert_subscriber(&form, &pool).await {
+        Ok(_) => HttpResponse::Ok().finish(),
+        Err(_err) => HttpResponse::BadRequest().finish(),
+    }
+}
+
+#[tracing::instrument(name = "Saving a new subscriber", skip(pool, form))]
+async fn insert_subscriber(form: &Subscription, pool: &PgPool) -> Result<(), sqlx::Error> {
+    sqlx::query!(
         r#"
     INSERT INTO subscriptions (id, email, name, subscribed_at)
     VALUES ($1, $2, $3, $4)
@@ -34,19 +42,12 @@ pub async fn subscribe(
         form.name,
         Utc::now()
     )
-    .execute(connection.get_ref())
-    .instrument(query_span)
-    .await;
+    .execute(pool)
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to execute query {:?}", e);
+        e
+    })?;
 
-    match row {
-        Ok(_) => HttpResponse::Ok().finish(),
-        Err(err) => {
-            tracing::error!(
-                "Request_ID {} - Failed to execute query: {:?}",
-                request_id,
-                err
-            );
-            HttpResponse::BadRequest().finish()
-        }
-    }
+    Ok(())
 }
