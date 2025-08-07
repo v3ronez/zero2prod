@@ -1,21 +1,17 @@
-use actix_web::{
-    HttpResponse,
-    web::{self, Form},
-};
+use actix_web::{HttpResponse, web};
 use chrono::Utc;
 use serde::Deserialize;
-use sqlx::{PgPool, Pool};
-use tracing::Instrument;
+use sqlx::PgPool;
 use uuid::Uuid;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Subscription {
     name: String,
     email: String,
 }
 
 #[tracing::instrument(
-    name = "Adding new subscriber", 
+    name = "Adding new subscriber",
     skip(form, pool),
     fields(
         request_id=%Uuid::new_v4(),
