@@ -1,4 +1,4 @@
-use secrecy::{ExposeSecret, SecretBox, SecretString};
+use secrecy::{ExposeSecret, SecretBox};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
