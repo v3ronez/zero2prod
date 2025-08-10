@@ -14,8 +14,7 @@ async fn main() -> std::io::Result<()> {
     let settings = configuration::get_configuration().expect("Failed to read configuration");
     let address = format!("127.0.0.1:{}", settings.application_port);
     let listener = TcpListener::bind(&address)?;
-    let connection_pool = sqlx::PgPool::connect(&settings.database.connection_string())
-        .await
+    let connection_pool = sqlx::PgPool::connect_lazy(&settings.database.connection_string())
         .expect("Failed to connection to postgres");
 
     println!("Server running on: {address}");
