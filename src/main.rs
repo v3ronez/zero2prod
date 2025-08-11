@@ -1,4 +1,5 @@
-use std::net::TcpListener;
+use sqlx::pool::PoolOptions;
+use std::{net::TcpListener, time::Duration};
 use zero2prod::{configuration, startup::run, telemetry};
 
 #[tokio::main]
@@ -17,7 +18,9 @@ async fn main() -> std::io::Result<()> {
         settings.application.host, settings.application.port
     );
     let listener = TcpListener::bind(&address)?;
-    let connection_pool = sqlx::PgPool::connect_lazy(&settings.database.connection_string())
+    let connection_pool = PoolOptions::new()
+        .acquire_timeout(Duration::from_secs(5))
+        .connect_lazy(&settings.database.connection_string())
         .expect("Failed to connection to postgres");
 
     println!("Server running on: {address}");
