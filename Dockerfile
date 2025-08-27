@@ -1,11 +1,19 @@
-#Builder stage
-FROM rust:1.89.0-slim AS builder
-
+#Caching cargo deps
+FROM lukemathwalker/cargo-chef:latest-rust-1.89.0-slim AS chef
 WORKDIR /app
-RUN apt update && apt install lld clang -y
-COPY  . .
-ENV SQLX_OFFLINE=true
-RUN cargo build --release
+RUN apt-get update -y \
+    && apt-get install -y --no-install-recommends lld clang libc6
+
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+COPY . .
+ENV SQLX_OFFILINE=true
+RUN cargo build --release --bin zero2prod
 
 #Runtime stage
 FROM debian:bullseye-slim AS runtime

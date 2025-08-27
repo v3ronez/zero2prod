@@ -43,13 +43,16 @@ async fn spawn_app() -> TestApp {
 async fn configure_database(
     config: &configuration::DatabaseSettings,
 ) -> sqlx::Pool<sqlx::Postgres> {
-    let query = format!(r#"CREATE DATABASE "{}";"#, &config.database_name);
-    let mut connection = PgConnection::connect(&config.connection_string_without_database())
+    let query = format!(r#"CREATE DATABASE "{}";"#, &config.database_name.as_str());
+    let mut connection = PgConnection::connect_with(&config.without_db())
         .await
         .expect(
             format!(
                 "Failed to connect on {}",
-                config.connection_string_without_database()
+                config
+                    .with_db()
+                    .get_database()
+                    .expect("Error to get database name")
             )
             .as_str(),
         );
@@ -59,9 +62,17 @@ async fn configure_database(
         .await
         .expect(format!("Error to execute this query: {}", query).as_str());
 
-    let connection_pool = PgPool::connect(&config.connection_string())
-        .await
-        .expect(format!("Failed to connect on {}", config.connection_string()).as_str());
+    let connection_pool = PgPool::connect_with(config.with_db()).await.expect(
+        format!(
+            "Failed to connect on {}",
+            config
+                .with_db()
+                .get_database()
+                .expect("Failed to get database name")
+        )
+        .as_str(),
+    );
+
     sqlx::migrate!("./migrations")
         .run(&connection_pool)
         .await
@@ -102,7 +113,6 @@ async fn subscribe_returns_200_for_valid_form_data() {
         .expect("Failed to execute request.");
     //assert
     assert_eq!(200, response.status().as_u16());
-
     let saved = sqlx::query!("SELECT email, name FROM subscriptions")
         .fetch_one(&app.connection_pool)
         .await
@@ -154,14 +164,9 @@ async fn drop_database(pool: &PgPool) {
     pool.close().await;
     let default_pool = configuration::get_configuration().unwrap();
 
-    let new_pool = PgPool::connect(
-        default_pool
-            .database
-            .connection_string_without_database()
-            .as_str(),
-    )
-    .await
-    .unwrap();
+    let new_pool = PgPool::connect_with(default_pool.database.without_db())
+        .await
+        .unwrap();
 
     sqlx::query(format!(r#"DROP DATABASE "{}";"#, dbname).as_str())
         .execute(&new_pool)

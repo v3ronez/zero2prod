@@ -20,8 +20,7 @@ async fn main() -> std::io::Result<()> {
     let listener = TcpListener::bind(&address)?;
     let connection_pool = PoolOptions::new()
         .acquire_timeout(Duration::from_secs(5))
-        .connect_lazy(&settings.database.connection_string())
-        .expect("Failed to connection to postgres");
+        .connect_lazy_with(settings.database.with_db());
 
     println!("Server running on: {address}");
     run(listener, connection_pool)?.await?;
