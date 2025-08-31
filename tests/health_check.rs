@@ -100,7 +100,7 @@ async fn health_check_works() {
 }
 
 #[tokio::test]
-async fn subscribe_returns_200_for_valid_form_data() {
+async fn subscriber_returns_400_when_fields_are_empty() {
     let app = spawn_app().await;
     let client = reqwest::Client::new();
     let test_cases = vec![
@@ -118,7 +118,7 @@ async fn subscribe_returns_200_for_valid_form_data() {
             .expect("Failed to execute request.");
         //assert
         assert_eq!(
-            200,
+            400,
             response.status().as_u16(),
             "The api did not return a 200 OK when the payload was {}",
             description
