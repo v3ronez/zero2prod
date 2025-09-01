@@ -3,11 +3,6 @@ use unicode_segmentation::UnicodeSegmentation;
 #[derive(Debug)]
 pub struct SubscriberName(String);
 
-pub struct NewSubscriber {
-    pub name: SubscriberName,
-    pub email: String,
-}
-
 impl SubscriberName {
     pub fn parse(value: String) -> Result<SubscriberName, String> {
         let is_empty_whitespace = value.trim().is_empty();

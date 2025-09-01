@@ -124,12 +124,6 @@ async fn subscriber_returns_400_when_fields_are_empty() {
             description
         );
     }
-    let saved = sqlx::query!("SELECT email, name FROM subscriptions")
-        .fetch_one(&app.connection_pool)
-        .await
-        .expect("Failed to fetch saved subscription");
-
-    assert_eq!(saved.email, "ursula_le_guin@gmail.com");
 
     //reset db
     drop_database(&app.connection_pool).await;

@@ -44,7 +44,8 @@ fi
 export PGPASSWORD="${DB_PASSWORD}"
 
 # DB connection
-export DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@localhost:${DB_PORT}/${DB_NAME}
+DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@localhost:${DB_PORT}/${DB_NAME}"
+export DATABASE_URL
 until psql -h "localhost" -U "${DB_USER}" -p "${DB_PORT}" -d "postgres" -c '\q'; do
   >&2 echo "Postgres is still unavailable - sleeping"
   sleep 2
