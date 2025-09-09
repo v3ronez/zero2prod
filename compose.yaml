@@ -18,3 +18,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+    volumes:
+      - newsletter_pg_data:/var/lib/postgresql/data
+
+volumes:
+    newsletter_pg_data:
+
