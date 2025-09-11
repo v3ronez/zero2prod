@@ -3,11 +3,13 @@ use sqlx::{
     ConnectOptions,
     postgres::{PgConnectOptions, PgSslMode},
 };
-use std::env;
+use std::{collections::HashMap, env};
 
 use config::{Config, File};
 use secrecy::{ExposeSecret, SecretBox};
 use serde::Deserialize;
+
+use crate::domain::SubscriberEmail;
 
 #[derive(Deserialize, Debug)]
 pub struct ApplicationSettings {
@@ -20,6 +22,7 @@ pub struct ApplicationSettings {
 pub struct Settings {
     pub database: DatabaseSettings,
     pub application: ApplicationSettings,
+    pub email_client: EmailClientSettings,
 }
 
 #[derive(Deserialize, Debug)]
@@ -80,6 +83,17 @@ impl TryFrom<String> for Enviroment {
                 other
             )),
         }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct EmailClientSettings {
+    pub base_url: String,
+    pub sender_email: String,
+}
+impl EmailClientSettings {
+    pub fn sender(&self) -> Result<SubscriberEmail, String> {
+        SubscriberEmail::parse(self.sender_email.clone())
     }
 }
 
