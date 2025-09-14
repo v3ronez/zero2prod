@@ -38,10 +38,11 @@ tracing-actix-web = "0.7.19"
 serde-aux = "4.7.0"
 unicode-segmentation = "1.12.0"
 validator = "0.20.0"
-reqwest = "0.12"
+reqwest = {version = "0.12", features = ["json"]}
 
 [dev-dependencies]
 claim = "0.5.0"
 fake = "4.4.0"
 quickcheck = "1.0.3"
 quickcheck_macros = "1.1.0"
+wiremock = "0.6.5"
