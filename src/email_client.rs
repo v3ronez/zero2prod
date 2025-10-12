@@ -1,7 +1,10 @@
-use reqwest::Client;
-use serde::Serialize;
+use std::fmt::format;
 
 use crate::domain::SubscriberEmail;
+use reqwest::Client;
+use secrecy::{ExposeSecret, SecretBox};
+use serde::Serialize;
+
 #[derive(Serialize)]
 struct SendEmailRequest {
     from: String,
@@ -14,14 +17,20 @@ pub struct EmailClient {
     pub sender: SubscriberEmail,
     pub http_client: Client,
     pub base_url: String,
+    authorization_token: SecretBox<String>,
 }
 
 impl EmailClient {
-    pub fn new(base_url: String, sender: SubscriberEmail) -> Self {
+    pub fn new(
+        base_url: String,
+        sender: SubscriberEmail,
+        authorization_token: SecretBox<String>,
+    ) -> Self {
         Self {
             http_client: Client::new(),
             sender,
             base_url,
+            authorization_token,
         }
     }
     pub async fn send_email(
@@ -30,8 +39,8 @@ impl EmailClient {
         subject: &str,
         html_content: &str,
         text_content: &str,
-    ) -> Result<(), String> {
-        let url = format!("{}/api/send/2317403", self.base_url);
+    ) -> Result<(), reqwest::Error> {
+        let url = &self.base_url;
         let request_body = SendEmailRequest {
             from: self.sender.as_ref().to_owned(),
             to: recipient.as_ref().to_owned(),
@@ -39,7 +48,16 @@ impl EmailClient {
             html_content: html_content.to_owned(),
             text_content: text_content.to_owned(),
         };
-        let builder = self.http_client.post(url).json(&request_body);
+        let _ = self
+            .http_client
+            .post(url)
+            .header(
+                "Authorization",
+                format!("Bearer {}", self.authorization_token.expose_secret()),
+            )
+            .json(&request_body)
+            .send()
+            .await?;
         Ok(())
     }
 }
@@ -47,12 +65,13 @@ impl EmailClient {
 #[cfg(test)]
 mod tests {
     use fake::{
-        Fake,
+        Fake, Faker,
         faker::{
             internet::en::SafeEmail,
             lorem::en::{Paragraph, Sentence},
         },
     };
+    use secrecy::SecretBox;
     use wiremock::{Mock, MockServer, ResponseTemplate, matchers::any};
 
     use crate::{domain::SubscriberEmail, email_client::EmailClient};
@@ -61,7 +80,8 @@ mod tests {
     async fn send_email_fires_a_request_to_base_url() {
         let mock_server = MockServer::start().await;
         let sender = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
-        let email_client = EmailClient::new(mock_server.uri(), sender);
+        let email_client =
+            EmailClient::new(mock_server.uri(), sender, SecretBox::new(Faker.fake()));
 
         Mock::given(any())
             .respond_with(ResponseTemplate::new(200))

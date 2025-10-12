@@ -3,7 +3,7 @@ use std::net::TcpListener;
 use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
-use zero2prod::{configuration, email_client::EmailClient, telemetry};
+use zero2prod::{configuration, email_client::EmailClient, startup::run, telemetry};
 
 static TRACING: Lazy<()> = Lazy::new(|| {
     let default_filter_level = "info".to_string();
@@ -32,8 +32,12 @@ async fn spawn_app() -> TestApp {
     let connection_pool = configure_database(&settings.database).await;
 
     let sender_email = settings.email_client.sender().unwrap();
-    let email_client = EmailClient::new(settings.email_client.base_url, sender_email);
-    let server = zero2prod::startup::run(listener, connection_pool.clone(), email_client).unwrap();
+    let email_client = EmailClient::new(
+        settings.email_client.base_url,
+        sender_email,
+        settings.email_client.authorization_token,
+    );
+    let server = run(listener, connection_pool.clone(), email_client).unwrap();
 
     let _ = tokio::spawn(server);
     TestApp {

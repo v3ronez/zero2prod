@@ -90,6 +90,7 @@ impl TryFrom<String> for Enviroment {
 pub struct EmailClientSettings {
     pub base_url: String,
     pub sender_email: String,
+    pub authorization_token: SecretBox<String>,
 }
 impl EmailClientSettings {
     pub fn sender(&self) -> Result<SubscriberEmail, String> {

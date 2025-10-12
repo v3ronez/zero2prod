@@ -38,7 +38,7 @@ tracing-actix-web = "0.7.19"
 serde-aux = "4.7.0"
 unicode-segmentation = "1.12.0"
 validator = "0.20.0"
-reqwest = {version = "0.12", features = ["json"]}
+reqwest = {version = "0.12", features = ["json", "rustls-tls"]}
 
 [dev-dependencies]
 claim = "0.5.0"

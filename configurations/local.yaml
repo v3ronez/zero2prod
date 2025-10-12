@@ -2,6 +2,6 @@ application:
   host: 127.0.0.1
 database:
   require_ssl: false
-email_client: 
-  base_url: "localhost"
-  sender_email: "test@gmail.com"
+email_client:
+  base_url: "https://sandbox.api.mailtrap.io/api/send/2317403"
+  sender_email: "test-local@gmail.com"
