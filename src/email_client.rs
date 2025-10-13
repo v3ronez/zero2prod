@@ -1,17 +1,16 @@
-use std::fmt::format;
-
 use crate::domain::SubscriberEmail;
 use reqwest::Client;
 use secrecy::{ExposeSecret, SecretBox};
 use serde::Serialize;
 
 #[derive(Serialize)]
-struct SendEmailRequest {
-    from: String,
-    to: String,
-    subject: String,
-    html_content: String,
-    text_content: String,
+// #[serde(rename_all = "PascalCase")]
+struct SendEmailRequest<'a> {
+    from: &'a str,
+    to: &'a str,
+    subject: &'a str,
+    html_content: &'a str,
+    text_content: &'a str,
 }
 pub struct EmailClient {
     pub sender: SubscriberEmail,
@@ -40,13 +39,13 @@ impl EmailClient {
         html_content: &str,
         text_content: &str,
     ) -> Result<(), reqwest::Error> {
-        let url = &self.base_url;
+        let url = format!("{}/api/send/2317403", &self.base_url);
         let request_body = SendEmailRequest {
-            from: self.sender.as_ref().to_owned(),
-            to: recipient.as_ref().to_owned(),
-            subject: subject.to_owned(),
-            html_content: html_content.to_owned(),
-            text_content: text_content.to_owned(),
+            from: self.sender.as_ref(),
+            to: recipient.as_ref(),
+            subject,
+            html_content,
+            text_content,
         };
         let _ = self
             .http_client
@@ -64,6 +63,7 @@ impl EmailClient {
 
 #[cfg(test)]
 mod tests {
+    use crate::{domain::SubscriberEmail, email_client::EmailClient};
     use fake::{
         Fake, Faker,
         faker::{
@@ -71,19 +71,41 @@ mod tests {
             lorem::en::{Paragraph, Sentence},
         },
     };
-    use secrecy::SecretBox;
-    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::any};
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{header, header_exists, method, path},
+    };
 
-    use crate::{domain::SubscriberEmail, email_client::EmailClient};
+    struct SendEmailBodyMatcher;
+    impl wiremock::Match for SendEmailBodyMatcher {
+        fn matches(&self, request: &wiremock::Request) -> bool {
+            let result: Result<serde_json::Value, _> = serde_json::from_slice(&request.body);
+            if let Ok(body) = result {
+                return body.get("from").is_some()
+                    && body.get("to").is_some()
+                    && body.get("subject").is_some()
+                    && body.get("html_content").is_some()
+                    && body.get("text_content").is_some();
+            }
+            false
+        }
+    }
 
     #[tokio::test]
-    async fn send_email_fires_a_request_to_base_url() {
+    async fn send_email_sends_the_expected_request() {
         let mock_server = MockServer::start().await;
         let sender = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
-        let email_client =
-            EmailClient::new(mock_server.uri(), sender, SecretBox::new(Faker.fake()));
+        let email_client = EmailClient::new(
+            mock_server.uri(),
+            sender,
+            secrecy::SecretBox::new(Faker.fake()),
+        );
 
-        Mock::given(any())
+        Mock::given(header_exists("Authorization"))
+            .and(header("Content-Type", "application/json"))
+            .and(path("/api/send/2317403"))
+            .and(method("POST"))
+            .and(SendEmailBodyMatcher)
             .respond_with(ResponseTemplate::new(200))
             .expect(1)
             .mount(&mock_server)
