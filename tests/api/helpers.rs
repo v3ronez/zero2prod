@@ -19,7 +19,12 @@ static TRACING: Lazy<()> = Lazy::new(|| {
     }
 });
 
-async fn spawn_app() -> TestApp {
+pub struct TestApp {
+    pub address: String,
+    pub connection_pool: sqlx::PgPool,
+}
+
+pub async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
 
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind a random port");
@@ -89,88 +94,7 @@ async fn configure_database(
     connection_pool
 }
 
-#[tokio::test]
-async fn health_check_works() {
-    let app = spawn_app().await;
-    let client = reqwest::Client::new();
-    let response = client
-        .get(format!("{}/health", &app.address))
-        .send()
-        .await
-        .expect("Failed to execute request.");
-    println!("\ntest server run on address: {}\n", &app.address);
-
-    assert!(response.status().is_success());
-    assert_eq!(response.content_length(), Some(0));
-
-    //reset db
-    drop_database(&app.connection_pool).await;
-}
-
-#[tokio::test]
-async fn subscriber_returns_400_when_fields_are_empty() {
-    let app = spawn_app().await;
-    let client = reqwest::Client::new();
-    let test_cases = vec![
-        ("name=&email=ursula_le_guin%40gmail.com", "empty name"),
-        ("name=Ursula&email=", "empty email"),
-        ("name=Ursula&email=definitely-not-an-email", "invalid email"),
-    ];
-    for (body, description) in test_cases {
-        let response = client
-            .post(format!("{}/subscriptions", &app.address))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(body)
-            .send()
-            .await
-            .expect("Failed to execute request.");
-        //assert
-        assert_eq!(
-            400,
-            response.status().as_u16(),
-            "The api did not return a 200 OK when the payload was {}",
-            description
-        );
-    }
-
-    //reset db
-    drop_database(&app.connection_pool).await;
-}
-
-#[tokio::test]
-async fn subscribe_returns_400_for_invalid_form_data() {
-    let app = spawn_app().await;
-    let client = reqwest::Client::new();
-    let body = vec![
-        ("name=le%20guin", "missing the email"),
-        ("email=ursula_le_%40gmail.com", "missing the name"),
-        ("", "missing both name and email"),
-    ];
-
-    for (invalid_body, error_message) in body {
-        //Act
-        let response = client
-            .post(format!("{}/subscriptions", &app.address))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(invalid_body)
-            .send()
-            .await
-            .expect("Failed to execute request.");
-        //Assert
-        assert_eq!(
-            400,
-            response.status().as_u16(),
-            // Additional customised error message on test failure
-            "The API did not fail with 400 Bad Request when the payload was {}.",
-            error_message
-        )
-    }
-
-    //reset db
-    drop_database(&app.connection_pool).await;
-}
-
-async fn drop_database(pool: &PgPool) {
+pub async fn drop_database(pool: &PgPool) {
     let opts = pool.connect_options();
     let dbname = opts.get_database().unwrap();
     pool.close().await;
@@ -184,9 +108,4 @@ async fn drop_database(pool: &PgPool) {
         .execute(&new_pool)
         .await
         .unwrap();
-}
-
-struct TestApp {
-    address: String,
-    connection_pool: sqlx::PgPool,
 }

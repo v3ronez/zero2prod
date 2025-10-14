@@ -36,7 +36,7 @@ impl SubscriberName {
 
 impl AsRef<str> for SubscriberName {
     fn as_ref(&self) -> &str {
-        &self.0.as_str()
+        self.0.as_str()
     }
 }
 

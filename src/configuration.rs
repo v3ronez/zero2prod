@@ -3,7 +3,7 @@ use sqlx::{
     ConnectOptions,
     postgres::{PgConnectOptions, PgSslMode},
 };
-use std::{collections::HashMap, env, time};
+use std::{env, time};
 
 use config::{Config, File};
 use secrecy::{ExposeSecret, SecretBox};
@@ -55,7 +55,7 @@ impl DatabaseSettings {
             .host(&self.host)
             .port(self.port)
             .username(&self.username)
-            .password(&self.password.expose_secret())
+            .password(self.password.expose_secret())
             .ssl_mode(ssl_mode)
     }
 }
