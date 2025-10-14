@@ -14,10 +14,12 @@ async fn main() -> std::io::Result<()> {
 
     let settings = configuration::get_configuration().expect("Failed to read configuration");
     let sender_email = settings.email_client.sender().unwrap();
+    let timeout = settings.email_client.timeout();
     let email_client = EmailClient::new(
         settings.email_client.base_url,
         sender_email,
         settings.email_client.authorization_token,
+        timeout,
     );
     let address = format!(
         "{}:{}",

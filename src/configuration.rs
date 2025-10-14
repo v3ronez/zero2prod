@@ -3,7 +3,7 @@ use sqlx::{
     ConnectOptions,
     postgres::{PgConnectOptions, PgSslMode},
 };
-use std::{collections::HashMap, env};
+use std::{collections::HashMap, env, time};
 
 use config::{Config, File};
 use secrecy::{ExposeSecret, SecretBox};
@@ -91,10 +91,14 @@ pub struct EmailClientSettings {
     pub base_url: String,
     pub sender_email: String,
     pub authorization_token: SecretBox<String>,
+    pub timeout_milliseconds: u64,
 }
 impl EmailClientSettings {
     pub fn sender(&self) -> Result<SubscriberEmail, String> {
         SubscriberEmail::parse(self.sender_email.clone())
+    }
+    pub fn timeout(&self) -> time::Duration {
+        time::Duration::from_millis(self.timeout_milliseconds)
     }
 }
 

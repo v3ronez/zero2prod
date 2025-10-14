@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::domain::SubscriberEmail;
 use reqwest::Client;
 use secrecy::{ExposeSecret, SecretBox};
@@ -12,11 +14,13 @@ struct SendEmailRequest<'a> {
     html_content: &'a str,
     text_content: &'a str,
 }
+
 pub struct EmailClient {
     pub sender: SubscriberEmail,
     pub http_client: Client,
     pub base_url: String,
     authorization_token: SecretBox<String>,
+    pub timeout: Duration,
 }
 
 impl EmailClient {
@@ -24,16 +28,15 @@ impl EmailClient {
         base_url: String,
         sender: SubscriberEmail,
         authorization_token: SecretBox<String>,
+        timeout: Duration,
     ) -> Self {
-        let http_client = Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-            .unwrap();
+        let http_client = Client::builder().timeout(timeout).build().unwrap();
         Self {
             http_client,
             sender,
             base_url,
             authorization_token,
+            timeout,
         }
     }
     pub async fn send_email(
@@ -68,6 +71,8 @@ impl EmailClient {
 
 #[cfg(test)]
 mod tests {
+    use std::time;
+
     use crate::{domain::SubscriberEmail, email_client::EmailClient};
     use claim::{assert_err, assert_ok};
     use fake::{
@@ -98,7 +103,12 @@ mod tests {
     }
 
     fn email_client(base_url: String) -> EmailClient {
-        EmailClient::new(base_url, email(), secrecy::SecretBox::new(Faker.fake()))
+        EmailClient::new(
+            base_url,
+            email(),
+            secrecy::SecretBox::new(Faker.fake()),
+            time::Duration::from_millis(100),
+        )
     }
 
     fn email() -> SubscriberEmail {
@@ -183,7 +193,7 @@ mod tests {
         let subscriber_email = email();
         let subject = subject();
         let content = content();
-        let response = ResponseTemplate::new(500).set_delay(std::time::Duration::from_secs(60 * 3));
+        let response = ResponseTemplate::new(500).set_delay(std::time::Duration::from_secs(3));
         Mock::given(any())
             .respond_with(response)
             .expect(1)

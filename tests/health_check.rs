@@ -32,10 +32,12 @@ async fn spawn_app() -> TestApp {
     let connection_pool = configure_database(&settings.database).await;
 
     let sender_email = settings.email_client.sender().unwrap();
+    let timeout = settings.email_client.timeout();
     let email_client = EmailClient::new(
         settings.email_client.base_url,
         sender_email,
         settings.email_client.authorization_token,
+        timeout,
     );
     let server = run(listener, connection_pool.clone(), email_client).unwrap();
 
