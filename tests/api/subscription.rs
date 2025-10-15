@@ -1,12 +1,11 @@
-use wiremock::{Mock, ResponseTemplate};
-
 use crate::helpers::{drop_database, spawn_app};
+
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
     // Arrange
     let app = spawn_app().await;
     let client = reqwest::Client::new();
-    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+    let body = "nam=le%20guin&email=ursula_le_guin%40gmail.com";
 
     // Act
     let response = client
@@ -16,6 +15,10 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
         .send()
         .await
         .expect("Failed to execute request.");
+
+    //reset database
+    let _ = &app.connection_pool.close().await;
+    drop_database(&app.connection_pool).await;
 
     // Assert
     assert_eq!(200, response.status().as_u16());
