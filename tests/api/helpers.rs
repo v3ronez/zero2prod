@@ -95,6 +95,7 @@ async fn configure_database(
 }
 
 pub async fn drop_database(pool: &PgPool) {
+    let _ = pool.close().await;
     let opts = pool.connect_options();
     let dbname = opts.get_database().unwrap();
     pool.close().await;
@@ -104,7 +105,7 @@ pub async fn drop_database(pool: &PgPool) {
         .await
         .unwrap();
 
-    sqlx::query(format!(r#"DROP DATABASE "{}";"#, dbname).as_str())
+    sqlx::query(format!(r#"DROP DATABASE IF EXISTS "{}";"#, dbname).as_str())
         .execute(&new_pool)
         .await
         .unwrap();

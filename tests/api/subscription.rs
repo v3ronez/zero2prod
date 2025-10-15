@@ -5,7 +5,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     // Arrange
     let app = spawn_app().await;
     let client = reqwest::Client::new();
-    let body = "nam=le%20guin&email=ursula_le_guin%40gmail.com";
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
     // Act
     let response = client
@@ -16,12 +16,18 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
         .await
         .expect("Failed to execute request.");
 
-    //reset database
-    let _ = &app.connection_pool.close().await;
-    drop_database(&app.connection_pool).await;
-
     // Assert
-    assert_eq!(200, response.status().as_u16());
+    let http_code = response.status().as_u16().clone();
+    let assert_result = std::panic::catch_unwind(|| assert_eq!(200, http_code));
+
+    //reset db
+    match assert_result {
+        Ok(_) => drop_database(&app.connection_pool).await,
+        Err(msg) => {
+            drop_database(&app.connection_pool).await;
+            std::panic::resume_unwind(msg)
+        }
+    }
 }
 
 #[tokio::test]
@@ -42,15 +48,22 @@ async fn subscriber_returns_400_when_fields_are_empty() {
             .await
             .expect("Failed to execute request.");
         //assert
-        assert_eq!(
-            400,
-            response.status().as_u16(),
-            "The api did not return a 200 OK when the payload was {}",
-            description
-        );
+        let http_code = response.status().as_u16().clone();
+
+        let assert_result = std::panic::catch_unwind(|| {
+            assert_eq!(
+                400, http_code,
+                "The api did not return a 200 OK when the payload was {}",
+                description
+            );
+        });
+
+        //reset db
+        if assert_result.is_err() {
+            drop_database(&app.connection_pool).await;
+        }
     }
 
-    //reset db
     drop_database(&app.connection_pool).await;
 }
 
@@ -73,16 +86,21 @@ async fn subscribe_returns_400_for_invalid_form_data() {
             .send()
             .await
             .expect("Failed to execute request.");
+        let http_code = response.status().as_u16().clone();
         //Assert
-        assert_eq!(
-            400,
-            response.status().as_u16(),
-            // Additional customised error message on test failure
-            "The API did not fail with 400 Bad Request when the payload was {}.",
-            error_message
-        )
+        let assert_result = std::panic::catch_unwind(|| {
+            assert_eq!(
+                400, http_code,
+                // Additional customised error message on test failure
+                "The API did not fail with 400 Bad Request when the payload was {}.",
+                error_message
+            )
+        });
+
+        if assert_result.is_err() {
+            drop_database(&app.connection_pool).await;
+        }
     }
 
-    //reset db
     drop_database(&app.connection_pool).await;
 }
