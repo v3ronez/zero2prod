@@ -4,22 +4,13 @@ use crate::helpers::{drop_database, spawn_app};
 async fn subscribe_returns_a_200_for_valid_form_data() {
     // Arrange
     let app = spawn_app().await;
-    let client = reqwest::Client::new();
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
     // Act
-    let response = client
-        .post(&format!("{}/subscriptions", &app.address))
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(body)
-        .send()
-        .await
-        .expect("Failed to execute request.");
+    let response = app.post_subscriptions(body.into()).await;
 
     // Assert
     let http_code = response.status().as_u16().clone();
-    let text = &response.text().await;
-    dbg!(text);
     let assert_result = std::panic::catch_unwind(|| assert_eq!(200, http_code));
 
     //reset db
@@ -35,20 +26,14 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
 #[tokio::test]
 async fn subscriber_returns_400_when_fields_are_empty() {
     let app = spawn_app().await;
-    let client = reqwest::Client::new();
     let test_cases = vec![
         ("name=&email=ursula_le_guin%40gmail.com", "empty name"),
         ("name=Ursula&email=", "empty email"),
         ("name=Ursula&email=definitely-not-an-email", "invalid email"),
     ];
     for (body, description) in test_cases {
-        let response = client
-            .post(format!("{}/subscriptions", &app.address))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(body)
-            .send()
-            .await
-            .expect("Failed to execute request.");
+        let response = app.post_subscriptions(body.into()).await;
+
         //assert
         let http_code = response.status().as_u16().clone();
 
@@ -72,7 +57,6 @@ async fn subscriber_returns_400_when_fields_are_empty() {
 #[tokio::test]
 async fn subscribe_returns_400_for_invalid_form_data() {
     let app = spawn_app().await;
-    let client = reqwest::Client::new();
     let body = vec![
         ("name=le%20guin", "missing the email"),
         ("email=ursula_le_%40gmail.com", "missing the name"),
@@ -81,13 +65,8 @@ async fn subscribe_returns_400_for_invalid_form_data() {
 
     for (invalid_body, error_message) in body {
         //Act
-        let response = client
-            .post(format!("{}/subscriptions", &app.address))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(invalid_body)
-            .send()
-            .await
-            .expect("Failed to execute request.");
+        let response = app.post_subscriptions(invalid_body.into()).await;
+
         let http_code = response.status().as_u16().clone();
         //Assert
         let assert_result = std::panic::catch_unwind(|| {
