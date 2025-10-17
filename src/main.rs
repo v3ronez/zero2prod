@@ -1,11 +1,4 @@
-use sqlx::pool::PoolOptions;
-use std::{net::TcpListener, time::Duration};
-use zero2prod::{
-    configuration,
-    email_client::EmailClient,
-    startup::{build, run},
-    telemetry,
-};
+use zero2prod::{configuration, startup::Application, telemetry};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
@@ -18,7 +11,7 @@ async fn main() -> std::io::Result<()> {
     telemetry::init_subscriber(subscriber);
 
     let configurations = configuration::get_configuration().expect("Failed to read configuration");
-    let server = build(configurations)?;
-    server.await?;
+    let app = Application::build(configurations).await?;
+    app.run_until_stopped().await?;
     Ok(())
 }

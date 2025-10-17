@@ -18,6 +18,8 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
 
     // Assert
     let http_code = response.status().as_u16().clone();
+    let text = &response.text().await;
+    dbg!(text);
     let assert_result = std::panic::catch_unwind(|| assert_eq!(200, http_code));
 
     //reset db

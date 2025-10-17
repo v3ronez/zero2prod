@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::domain::SubscriberEmail;
 use reqwest::Client;
-use secrecy::{ExposeSecret, SecretBox};
+use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -15,11 +15,12 @@ struct SendEmailRequest<'a> {
     text_content: &'a str,
 }
 
+#[derive(Clone)]
 pub struct EmailClient {
     pub sender: SubscriberEmail,
     pub http_client: Client,
     pub base_url: String,
-    authorization_token: SecretBox<String>,
+    authorization_token: SecretString,
     pub timeout: Duration,
 }
 
@@ -27,7 +28,7 @@ impl EmailClient {
     pub fn new(
         base_url: String,
         sender: SubscriberEmail,
-        authorization_token: SecretBox<String>,
+        authorization_token: SecretString,
         timeout: Duration,
     ) -> Self {
         let http_client = Client::builder().timeout(timeout).build().unwrap();
@@ -82,6 +83,7 @@ mod tests {
             lorem::en::{Paragraph, Sentence},
         },
     };
+    use secrecy::SecretString;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
         matchers::{any, header, header_exists, method, path},
@@ -106,7 +108,7 @@ mod tests {
         EmailClient::new(
             base_url,
             email(),
-            secrecy::SecretBox::new(Faker.fake()),
+            SecretString::from(Faker.fake::<String>()),
             time::Duration::from_millis(100),
         )
     }

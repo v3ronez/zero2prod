@@ -6,29 +6,29 @@ use sqlx::{
 use std::{env, time};
 
 use config::{Config, File};
-use secrecy::{ExposeSecret, SecretBox};
+use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
 use crate::domain::SubscriberEmail;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct ApplicationSettings {
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
     pub host: String,
 }
 
-#[derive(Deserialize, Debug)]
-pub struct Settings {
+#[derive(Deserialize, Debug, Clone)]
+pub struct Configurations {
     pub database: DatabaseSettings,
     pub application: ApplicationSettings,
     pub email_client: EmailClientSettings,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct DatabaseSettings {
     pub username: String,
-    pub password: SecretBox<String>,
+    pub password: SecretString,
     pub host: String,
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
@@ -86,13 +86,14 @@ impl TryFrom<String> for Enviroment {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct EmailClientSettings {
     pub base_url: String,
     pub sender_email: String,
-    pub authorization_token: SecretBox<String>,
+    pub authorization_token: SecretString,
     pub timeout_milliseconds: u64,
 }
+
 impl EmailClientSettings {
     pub fn sender(&self) -> Result<SubscriberEmail, String> {
         SubscriberEmail::parse(self.sender_email.clone())
@@ -102,7 +103,7 @@ impl EmailClientSettings {
     }
 }
 
-pub fn get_configuration() -> Result<Settings, config::ConfigError> {
+pub fn get_configuration() -> Result<Configurations, config::ConfigError> {
     let base_path = env::current_dir().expect("Failed to get base path");
     let config_dir = base_path.join("configurations");
     let base_config = config_dir.join("base.yaml");
@@ -123,5 +124,5 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
                 .separator("__"),
         )
         .build()?;
-    settings.try_deserialize::<Settings>()
+    settings.try_deserialize::<Configurations>()
 }

@@ -1,9 +1,16 @@
 use std::net::TcpListener;
 
 use once_cell::sync::Lazy;
+use secrecy::SecretString;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
+use tracing_log::format_trace;
 use uuid::Uuid;
-use zero2prod::{configuration, email_client::EmailClient, startup::run, telemetry};
+use zero2prod::{
+    configuration::{self, DatabaseSettings},
+    email_client::EmailClient,
+    startup::{Application, get_connection_pool, run},
+    telemetry,
+};
 
 static TRACING: Lazy<()> = Lazy::new(|| {
     let default_filter_level = "info".to_string();
@@ -27,35 +34,36 @@ pub struct TestApp {
 pub async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
 
-    let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind a random port");
-    let port = listener.local_addr().unwrap().port();
-    let address = format!("http://127.0.0.1:{}", port);
-    let mut settings =
-        configuration::get_configuration().expect("Failed to read configuration file");
-    settings.database.database_name = Uuid::now_v7().to_string();
+    let configurations = {
+        let mut c = configuration::get_configuration().expect("Failed to read configuration file");
+        c.database.database_name = Uuid::now_v7().to_string();
+        c.application.port = 0;
+        c
+    };
+    let app = Application::build(configurations.clone())
+        .await
+        .expect("Error to init the application on tests");
 
-    let connection_pool = configure_database(&settings.database).await;
+    let address = format!("http://127.0.0.1:{}", app.port());
+    configure_database(&configurations.database).await;
 
-    let sender_email = settings.email_client.sender().unwrap();
-    let timeout = settings.email_client.timeout();
-    let email_client = EmailClient::new(
-        settings.email_client.base_url,
-        sender_email,
-        settings.email_client.authorization_token,
-        timeout,
-    );
-    let server = run(listener, connection_pool.clone(), email_client).unwrap();
+    let _ = tokio::spawn(app.run_until_stopped());
 
-    let _ = tokio::spawn(server);
     TestApp {
         address,
-        connection_pool,
+        connection_pool: get_connection_pool(&configurations.database),
     }
 }
 
 async fn configure_database(
     config: &configuration::DatabaseSettings,
 ) -> sqlx::Pool<sqlx::Postgres> {
+    let maintenance_settings = DatabaseSettings {
+        database_name: "postgres".to_string(),
+        username: "postgres".to_string(),
+        password: SecretString::from("postgres".to_string()),
+        ..config.clone()
+    };
     let query = format!(r#"CREATE DATABASE "{}";"#, &config.database_name.as_str());
     let mut connection = PgConnection::connect_with(&config.without_db())
         .await
@@ -104,6 +112,20 @@ pub async fn drop_database(pool: &PgPool) {
     let new_pool = PgPool::connect_with(default_pool.database.without_db())
         .await
         .unwrap();
+
+    //kill all connection before drop the database
+    sqlx::query(
+        format!(
+            r#"SELECT pg_terminate_backend(pid)
+                FROM pg_stat_activity
+                WHERE datname = '{}';"#,
+            dbname
+        )
+        .as_str(),
+    )
+    .execute(&new_pool)
+    .await
+    .unwrap();
 
     sqlx::query(format!(r#"DROP DATABASE IF EXISTS "{}";"#, dbname).as_str())
         .execute(&new_pool)
