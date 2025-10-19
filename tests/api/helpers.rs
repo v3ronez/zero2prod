@@ -6,6 +6,7 @@ use secrecy::SecretString;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use tracing_log::format_trace;
 use uuid::Uuid;
+use wiremock::MockServer;
 use zero2prod::{
     configuration::{self, DatabaseSettings},
     email_client::EmailClient,
@@ -30,14 +31,17 @@ static TRACING: Lazy<()> = Lazy::new(|| {
 pub struct TestApp {
     pub address: String,
     pub connection_pool: sqlx::PgPool,
+    pub email_client: MockServer,
 }
 
 pub async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
 
+    let email_client = MockServer::start().await;
     let configurations = {
         let mut c = configuration::get_configuration().expect("Failed to read configuration file");
         c.database.database_name = Uuid::now_v7().to_string();
+        c.email_client.base_url = email_client.uri();
         c.application.port = 0;
         c
     };
@@ -53,15 +57,19 @@ pub async fn spawn_app() -> TestApp {
     TestApp {
         address,
         connection_pool: get_connection_pool(&configurations.database),
+        email_client,
     }
 }
 
 impl TestApp {
-    pub async fn post_subscriptions(&self, body: String) -> reqwest::Response {
+    pub async fn post_subscriptions<B>(&self, body: B) -> reqwest::Response
+    where
+        B: Into<String>,
+    {
         Client::new()
             .post(&format!("{}/subscriptions", &self.address))
             .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(body)
+            .body(body.into())
             .send()
             .await
             .expect("Failed to execute request")
@@ -71,12 +79,6 @@ impl TestApp {
 async fn configure_database(
     config: &configuration::DatabaseSettings,
 ) -> sqlx::Pool<sqlx::Postgres> {
-    let maintenance_settings = DatabaseSettings {
-        database_name: "postgres".to_string(),
-        username: "postgres".to_string(),
-        password: SecretString::from("postgres".to_string()),
-        ..config.clone()
-    };
     let query = format!(r#"CREATE DATABASE "{}";"#, &config.database_name.as_str());
     let mut connection = PgConnection::connect_with(&config.without_db())
         .await

@@ -59,13 +59,14 @@ pub fn run(
 ) -> Result<Server, std::io::Error> {
     let connection_pool = web::Data::new(connection_pool);
     let email_client = Data::new(email_client);
+
     let server = HttpServer::new(move || {
         App::new()
             .wrap(TracingLogger::default())
             .route("/health", web::get().to(health_check))
             .route("/subscriptions", web::post().to(subscribe))
-            .app_data(connection_pool.clone())
-            .app_data(email_client.clone())
+            .app_data(connection_pool.clone()) // each request receive a clone of connection pool
+            .app_data(email_client.clone()) // each request receive a clone of email client
     })
     .listen(listener)?
     .run();

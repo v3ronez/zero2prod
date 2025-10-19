@@ -15,7 +15,7 @@ struct SendEmailRequest<'a> {
     text_content: &'a str,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct EmailClient {
     pub sender: SubscriberEmail,
     pub http_client: Client,

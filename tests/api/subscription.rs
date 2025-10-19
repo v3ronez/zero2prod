@@ -1,3 +1,10 @@
+use core::panic;
+
+use wiremock::{
+    Mock, ResponseTemplate,
+    matchers::{method, path},
+};
+
 use crate::helpers::{drop_database, spawn_app};
 
 #[tokio::test]
@@ -6,8 +13,14 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     let app = spawn_app().await;
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
+    Mock::given(path("/api/send/2317403"))
+        .and(method("post"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&app.email_client)
+        .await;
+
     // Act
-    let response = app.post_subscriptions(body.into()).await;
+    let response = app.post_subscriptions(body).await;
 
     // Assert
     let http_code = response.status().as_u16().clone();
@@ -32,7 +45,7 @@ async fn subscriber_returns_400_when_fields_are_empty() {
         ("name=Ursula&email=definitely-not-an-email", "invalid email"),
     ];
     for (body, description) in test_cases {
-        let response = app.post_subscriptions(body.into()).await;
+        let response = app.post_subscriptions(body).await;
 
         //assert
         let http_code = response.status().as_u16().clone();
@@ -65,7 +78,7 @@ async fn subscribe_returns_400_for_invalid_form_data() {
 
     for (invalid_body, error_message) in body {
         //Act
-        let response = app.post_subscriptions(invalid_body.into()).await;
+        let response = app.post_subscriptions(invalid_body).await;
 
         let http_code = response.status().as_u16().clone();
         //Assert
@@ -82,6 +95,25 @@ async fn subscribe_returns_400_for_invalid_form_data() {
             drop_database(&app.connection_pool).await;
         }
     }
+    drop_database(&app.connection_pool).await;
+}
 
+#[tokio::test]
+async fn subscriber_sends_a_confirmation_email_for_valid_data() {
+    let app = spawn_app().await;
+    let body = "name=henriquetest%20veronez&email=henriqueteste@gmail.com";
+
+    Mock::given(path("/api/send/2317403"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.email_client)
+        .await;
+    app.post_subscriptions(body).await;
+    // let assert_result = std::panic::catch_unwind(|| assert_eq!(true, false));
+    //
+    // if assert_result.is_err() {
+    //     drop_database(&app.connection_pool).await;
+    // }
     drop_database(&app.connection_pool).await;
 }
