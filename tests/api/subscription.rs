@@ -110,10 +110,5 @@ async fn subscriber_sends_a_confirmation_email_for_valid_data() {
         .mount(&app.email_client)
         .await;
     app.post_subscriptions(body).await;
-    // let assert_result = std::panic::catch_unwind(|| assert_eq!(true, false));
-    //
-    // if assert_result.is_err() {
-    //     drop_database(&app.connection_pool).await;
-    // }
     drop_database(&app.connection_pool).await;
 }
