@@ -1,6 +1,3 @@
-use core::panic;
-
-use serde_json::{Error, Value};
 use wiremock::{
     Mock, ResponseTemplate,
     matchers::{method, path},
@@ -60,8 +57,12 @@ async fn subscriber_returns_400_when_fields_are_empty() {
         });
 
         //reset db
-        if assert_result.is_err() {
-            drop_database(&app.connection_pool).await;
+        match assert_result {
+            Ok(_) => continue,
+            Err(msg) => {
+                drop_database(&app.connection_pool).await;
+                std::panic::resume_unwind(msg)
+            }
         }
     }
 
@@ -92,8 +93,12 @@ async fn subscribe_returns_400_for_invalid_form_data() {
             )
         });
 
-        if assert_result.is_err() {
-            drop_database(&app.connection_pool).await;
+        match assert_result {
+            Ok(_) => continue,
+            Err(msg) => {
+                drop_database(&app.connection_pool).await;
+                std::panic::resume_unwind(msg)
+            }
         }
     }
     drop_database(&app.connection_pool).await;
@@ -146,5 +151,15 @@ async fn subscribe_sends_a_confirmation_email_with_a_link() {
     let html_link = get_link(&body["html_content"].as_str().unwrap()).await;
     let text_link = get_link(&body["text_content"].as_str().unwrap()).await;
 
-    drop_database(&app.connection_pool).await;
+    let email_are_equals = std::panic::catch_unwind(|| {
+        assert_eq!(html_link, text_link);
+    });
+
+    match email_are_equals {
+        Ok(_) => drop_database(&app.connection_pool).await,
+        Err(msg) => {
+            drop_database(&app.connection_pool).await;
+            std::panic::resume_unwind(msg)
+        }
+    }
 }
