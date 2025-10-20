@@ -1,5 +1,6 @@
 use core::panic;
 
+use serde_json::{Error, Value};
 use wiremock::{
     Mock, ResponseTemplate,
     matchers::{method, path},
@@ -110,5 +111,40 @@ async fn subscriber_sends_a_confirmation_email_for_valid_data() {
         .mount(&app.email_client)
         .await;
     app.post_subscriptions(body).await;
+    drop_database(&app.connection_pool).await;
+}
+
+#[tokio::test]
+async fn subscribe_sends_a_confirmation_email_with_a_link() {
+    let app = spawn_app().await;
+    let body = "name=le%20guin&email=ursula_le_guin@gmail.com";
+
+    Mock::given(path("/api/send/2317403"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&app.email_client)
+        .await;
+
+    app.post_subscriptions(body).await;
+    let email_request = &app.email_client.received_requests().await.unwrap()[0];
+    let body: serde_json::Value = serde_json::from_slice(&email_request.body).unwrap();
+    let get_link = async |s: &str| {
+        let links: Vec<_> = linkify::LinkFinder::new()
+            .links(s)
+            .filter(|l| *l.kind() == linkify::LinkKind::Url)
+            .collect();
+
+        let assert_result = std::panic::catch_unwind(|| {
+            assert_eq!(links.len(), 1);
+        });
+
+        if assert_result.is_err() {
+            drop_database(&app.connection_pool).await;
+        }
+        links[0].as_str().to_owned()
+    };
+    let html_link = get_link(&body["html_content"].as_str().unwrap()).await;
+    let text_link = get_link(&body["text_content"].as_str().unwrap()).await;
+
     drop_database(&app.connection_pool).await;
 }
