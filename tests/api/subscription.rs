@@ -1,3 +1,4 @@
+use sqlx::query;
 use wiremock::{
     Mock, ResponseTemplate,
     matchers::{method, path},
@@ -11,6 +12,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     let app = spawn_app().await;
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
+    //mocking the email server
     Mock::given(path("/api/send/2317403"))
         .and(method("post"))
         .respond_with(ResponseTemplate::new(200))
@@ -26,6 +28,39 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
 
     //reset db
     match assert_result {
+        Ok(_) => drop_database(&app.connection_pool).await,
+        Err(msg) => {
+            drop_database(&app.connection_pool).await;
+            std::panic::resume_unwind(msg)
+        }
+    }
+}
+
+#[tokio::test]
+async fn subscriber_persists_the_new_subscriber() {
+    let app = spawn_app().await;
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+
+    Mock::given(path("/api/send/2317403"))
+        .and(method("post"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&app.email_client)
+        .await;
+
+    let _ = app.post_subscriptions(body).await;
+
+    let saved = sqlx::query!("SELECT name, email, status FROM subscriptions; ")
+        .fetch_one(&app.connection_pool)
+        .await
+        .expect("Error to fetch an user");
+
+    let assert_properties = std::panic::catch_unwind(|| {
+        assert_eq!(saved.name, "le guin");
+        assert_eq!(saved.email, "ursula_le_guin@gmail.com");
+        assert_eq!(saved.status, "pending_confirmation");
+    });
+
+    match assert_properties {
         Ok(_) => drop_database(&app.connection_pool).await,
         Err(msg) => {
             drop_database(&app.connection_pool).await;
