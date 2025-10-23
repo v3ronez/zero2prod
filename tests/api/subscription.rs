@@ -1,4 +1,3 @@
-use sqlx::query;
 use wiremock::{
     Mock, ResponseTemplate,
     matchers::{method, path},
@@ -16,7 +15,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     Mock::given(path("/api/send/2317403"))
         .and(method("post"))
         .respond_with(ResponseTemplate::new(200))
-        .mount(&app.email_client)
+        .mount(&app.email_server)
         .await;
 
     // Act
@@ -44,7 +43,7 @@ async fn subscriber_persists_the_new_subscriber() {
     Mock::given(path("/api/send/2317403"))
         .and(method("post"))
         .respond_with(ResponseTemplate::new(200))
-        .mount(&app.email_client)
+        .mount(&app.email_server)
         .await;
 
     let _ = app.post_subscriptions(body).await;
@@ -148,7 +147,7 @@ async fn subscriber_sends_a_confirmation_email_for_valid_data() {
         .and(method("POST"))
         .respond_with(ResponseTemplate::new(200))
         .expect(1)
-        .mount(&app.email_client)
+        .mount(&app.email_server)
         .await;
     app.post_subscriptions(body).await;
     drop_database(&app.connection_pool).await;
@@ -162,11 +161,11 @@ async fn subscribe_sends_a_confirmation_email_with_a_link() {
     Mock::given(path("/api/send/2317403"))
         .and(method("POST"))
         .respond_with(ResponseTemplate::new(200))
-        .mount(&app.email_client)
+        .mount(&app.email_server)
         .await;
 
     app.post_subscriptions(body).await;
-    let email_request = &app.email_client.received_requests().await.unwrap()[0];
+    let email_request = &app.email_server.received_requests().await.unwrap()[0];
     let body: serde_json::Value = serde_json::from_slice(&email_request.body).unwrap();
     let get_link = async |s: &str| {
         let links: Vec<_> = linkify::LinkFinder::new()

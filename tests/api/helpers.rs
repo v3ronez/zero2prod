@@ -1,16 +1,11 @@
-use std::net::TcpListener;
-
 use once_cell::sync::Lazy;
 use reqwest::Client;
-use secrecy::SecretString;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
-use tracing_log::format_trace;
 use uuid::Uuid;
 use wiremock::MockServer;
 use zero2prod::{
-    configuration::{self, DatabaseSettings},
-    email_client::EmailClient,
-    startup::{Application, get_connection_pool, run},
+    configuration::{self},
+    startup::{Application, get_connection_pool},
     telemetry,
 };
 
@@ -31,7 +26,8 @@ static TRACING: Lazy<()> = Lazy::new(|| {
 pub struct TestApp {
     pub address: String,
     pub connection_pool: sqlx::PgPool,
-    pub email_client: MockServer,
+    pub email_server: MockServer,
+    pub port: u16,
 }
 
 pub async fn spawn_app() -> TestApp {
@@ -50,14 +46,16 @@ pub async fn spawn_app() -> TestApp {
         .expect("Error to init the application on tests");
 
     let address = format!("http://127.0.0.1:{}", app.port());
+    let app_port = app.port();
     configure_database(&configurations.database).await;
 
     let _ = tokio::spawn(app.run_until_stopped());
 
     TestApp {
-        address,
+        port: app_port,
         connection_pool: get_connection_pool(&configurations.database),
-        email_client,
+        email_server: email_client,
+        address,
     }
 }
 

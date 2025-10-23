@@ -1,6 +1,6 @@
 use crate::configuration::{Configurations, DatabaseSettings};
 use crate::email_client::EmailClient;
-use crate::routes::{health_check, subscribe};
+use crate::routes::{confirm, health_check, subscribe};
 use actix_web::dev::Server;
 use actix_web::web::Data;
 use actix_web::{App, HttpServer, web};
@@ -11,8 +11,8 @@ use std::time::Duration;
 use tracing_actix_web::TracingLogger;
 
 pub struct Application {
-    port: u16,
-    server: Server,
+    pub port: u16,
+    pub server: Server,
 }
 
 impl Application {
@@ -39,7 +39,12 @@ impl Application {
         );
         let listener = TcpListener::bind(&address)?;
         let port = listener.local_addr().unwrap().port();
-        let server = run(listener, connection_pool, email_client)?;
+        let server = run(
+            listener,
+            connection_pool,
+            email_client,
+            configurations.application.base_url,
+        )?;
         Ok(Self { port, server })
     }
 
@@ -52,19 +57,26 @@ impl Application {
     }
 }
 
+#[derive(Debug)]
+pub struct ApplicationBaseUrl(pub String);
+
 pub fn run(
     listener: TcpListener,
     connection_pool: PgPool,
     email_client: EmailClient,
+    base_url: String,
 ) -> Result<Server, std::io::Error> {
     let connection_pool = web::Data::new(connection_pool);
     let email_client = Data::new(email_client);
+    let base_url = web::Data::new(ApplicationBaseUrl(base_url));
 
     let server = HttpServer::new(move || {
         App::new()
             .wrap(TracingLogger::default())
             .route("/health", web::get().to(health_check))
             .route("/subscriptions", web::post().to(subscribe))
+            .route("/subscriptions/confirm", web::get().to(confirm))
+            .app_data(base_url.clone())
             .app_data(connection_pool.clone()) // each request receive a clone of connection pool
             .app_data(email_client.clone()) // each request receive a clone of email client
     })
