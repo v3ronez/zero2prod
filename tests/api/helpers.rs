@@ -58,6 +58,10 @@ pub async fn spawn_app() -> TestApp {
         address,
     }
 }
+pub struct ConfirmationLinks {
+    pub html: String,
+    pub plain_text: String,
+}
 
 impl TestApp {
     pub async fn post_subscriptions<B>(&self, body: B) -> reqwest::Response
@@ -71,6 +75,41 @@ impl TestApp {
             .send()
             .await
             .expect("Failed to execute request")
+    }
+
+    pub async fn get_confirmation_link(
+        &self,
+        email_request: &wiremock::Request,
+    ) -> ConfirmationLinks {
+        let body: serde_json::Value = serde_json::from_slice(&email_request.body).unwrap();
+        let get_link = async |s: &str| {
+            let links: Vec<_> = linkify::LinkFinder::new()
+                .links(s)
+                .filter(|l| *l.kind() == linkify::LinkKind::Url)
+                .collect();
+
+            let assert_result = std::panic::catch_unwind(|| {
+                assert_eq!(links.len(), 1);
+            });
+
+            if assert_result.is_err() {
+                drop_database(&self.connection_pool).await;
+            }
+            let raw_link = links[0].as_str().to_owned();
+            let mut confirmation_link = reqwest::Url::parse(&raw_link).unwrap();
+            let assert_result = std::panic::catch_unwind(|| {
+                assert_eq!(confirmation_link.host_str().unwrap(), "127.0.0.1");
+            });
+            if assert_result.is_err() {
+                drop_database(&self.connection_pool).await;
+            }
+
+            confirmation_link.set_port(Some(self.port)).unwrap();
+            confirmation_link.as_str().to_owned()
+        };
+        let html = get_link(&body["html_content"].as_str().unwrap()).await;
+        let plain_text = get_link(&body["text_content"].as_str().unwrap()).await;
+        ConfirmationLinks { html, plain_text }
     }
 }
 

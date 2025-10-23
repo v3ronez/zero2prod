@@ -32,35 +32,9 @@ async fn the_link_returned_by_subscribe_returns_a_200_if_called() {
     app.post_subscriptions(body).await;
 
     let email_request = &app.email_server.received_requests().await.unwrap()[0];
-    let body: serde_json::Value = serde_json::from_slice(&email_request.body).unwrap();
-    let get_link = async |s: &str| {
-        let links: Vec<_> = linkify::LinkFinder::new()
-            .links(s)
-            .filter(|l| *l.kind() == linkify::LinkKind::Url)
-            .collect();
+    let confirmation_link = app.get_confirmation_link(email_request).await;
 
-        let assert_result = std::panic::catch_unwind(|| {
-            assert_eq!(links.len(), 1);
-        });
-
-        if assert_result.is_err() {
-            drop_database(&app.connection_pool).await;
-        }
-        links[0].as_str().to_owned()
-    };
-    let raw_confirmation_link = &get_link(&body["html_content"].as_str().unwrap()).await;
-
-    let mut confirmation_link = Url::parse(raw_confirmation_link).unwrap();
-
-    let assert_result =
-        std::panic::catch_unwind(|| assert_eq!(confirmation_link.host_str().unwrap(), "127.0.0.1"));
-    if assert_result.is_err() {
-        drop_database(&app.connection_pool).await;
-        std::panic::resume_unwind(assert_result.err().unwrap());
-    }
-    confirmation_link.set_port(Some(app.port)).unwrap();
-
-    let response = reqwest::get(confirmation_link).await.unwrap();
+    let response = reqwest::get(confirmation_link.html).await.unwrap();
     let status = response.status().as_u16();
     let assert_result = std::panic::catch_unwind(|| assert_eq!(status, 200));
     if assert_result.is_err() {
