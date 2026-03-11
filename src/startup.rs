@@ -1,16 +1,13 @@
-use actix_web::{
-    App, HttpServer,
-    dev::Server,
-    web::{self, Data},
-};
-use sqlx::PgConnection;
-use std::{io::Error, net::TcpListener, sync::Arc};
+use actix_web::web;
+use actix_web::{App, HttpServer, dev::Server};
+use sqlx::{PgConnection, PgPool};
+use std::{io::Error, net::TcpListener};
 
 use crate::routes::{health_check, subscription};
 
-pub fn run(listener: TcpListener, connection: PgConnection) -> Result<Server, Error> {
+pub fn run(listener: TcpListener, db_pool: PgPool) -> Result<Server, Error> {
     // Web::Data::new ->> Arc<T>
-    let connection = web::Data::new(connection);
+    let db_pool = web::Data::new(db_pool);
     let server = HttpServer::new(move || {
         App::new()
             .service(
@@ -18,7 +15,7 @@ pub fn run(listener: TcpListener, connection: PgConnection) -> Result<Server, Er
                     .route("/health-check", web::get().to(health_check))
                     .route("/subscriptions", web::post().to(subscription)),
             )
-            .app_data(connection.clone())
+            .app_data(db_pool.clone())
     })
     .listen(listener)?
     .run();
