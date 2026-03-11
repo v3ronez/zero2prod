@@ -1,6 +1,6 @@
 use actix_web::web;
 use actix_web::{App, HttpServer, dev::Server};
-use sqlx::{PgConnection, PgPool};
+use sqlx::PgPool;
 use std::{io::Error, net::TcpListener};
 
 use crate::routes::{health_check, subscription};

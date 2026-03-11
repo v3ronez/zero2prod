@@ -14,7 +14,7 @@ services:
       timeout: 10s
       retries: 5
     volumes:
-      - newsletter_pg_data:/var/lib/postgresql/data
+      # - newsletter_pg_data:/var/lib/postgresql/data
       - ./docker/db/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
 
 volumes:
