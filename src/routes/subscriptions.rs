@@ -15,7 +15,10 @@ pub async fn subscription(form: Form<SubscriptionForm>, pool: Data<PgPool>) -> H
     let current_time = OffsetDateTime::now_utc();
     match sqlx::query!(
         r#"
-    insert into subscriptions (id, email, name, subscribed_at, created_at, updated_at) values ($1, $2, $3, $4, $5, $6)
+    INSERT INTO subscriptions
+    (id, email, name, subscribed_at, created_at, updated_at)
+    VALUES
+    ($1, $2, $3, $4, $5, $6);
     "#,
         Uuid::now_v7(),
         form.email,

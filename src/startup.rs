@@ -1,3 +1,4 @@
+use actix_web::middleware::Logger;
 use actix_web::web;
 use actix_web::{App, HttpServer, dev::Server};
 use sqlx::PgPool;
@@ -10,6 +11,7 @@ pub fn run(listener: TcpListener, db_pool: PgPool) -> Result<Server, Error> {
     let db_pool = web::Data::new(db_pool);
     let server = HttpServer::new(move || {
         App::new()
+            .wrap(Logger::default())
             .service(
                 web::scope("/v1")
                     .route("/health-check", web::get().to(health_check))
